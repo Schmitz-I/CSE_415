@@ -1,37 +1,34 @@
+### ELIZABETH TODOS: Implement transposition table. Think about how I want it to handle limited resources :/
+## After transposition table, then implement ETC and MTD to increase pruning.
+## After that, implement utterances :D
+
+
 '''
 inky_KInARow.py
 Authors: Schmitz, Ilse; Vuu, Alexander; Bui, Elizabeth
 
 An agent for playing "K-in-a-Row with Forbidden Squares" and related games.
 CSE 415, University of Washington
-
-THIS IS A TEMPLATE WITH STUBS FOR THE REQUIRED FUNCTIONS.
-YOU CAN ADD WHATEVER ADDITIONAL FUNCTIONS YOU NEED IN ORDER
-TO PROVIDE A GOOD STRUCTURE FOR YOUR IMPLEMENTATION.
-
 '''
 
 from agent_base import KAgent
 from game_types import State, Game_Type
 
 AUTHORS = 'Ilse Schmitz and Alexander Vuu and Elizabeth Bui' 
-UWNETIDS = ['inky', '', ''] # The first UWNetID here should
-# match the one in the file name, e.g., janiesmith99_KInARow.py.
+UWNETIDS = ['inky', 'hocadoo', 'kaitebui']
 
-import time # You'll probably need this to avoid losing a
- # game due to exceeding a time limit.
+import time
+import random # Used to generate number for twin
 
-# Create your own type of agent by subclassing KAgent:
-
-class OurAgent(KAgent):  # Keep the class name "OurAgent" so a game master
-    # knows how to instantiate your agent class.
+class OurAgent(KAgent):  
 
     def __init__(self, twin=False):
         self.twin=twin
-        self.nickname = 'Nic'
-        if twin: self.nickname += '2'
-        self.long_name = 'Templatus Skeletus'
-        if twin: self.long_name += ' II'
+        self.nickname = 'Slim Schady'
+        twin_ver = random.randint(1000, 2000)
+        if twin: self.nickname += " " + twin_ver
+        self.long_name = 'Schadenfreude Collector'
+        if twin: self.long_name += " " + roman_numeral(twin_ver)
         self.persona = 'bland'
         self.voice_info = {'Chrome': 10, 'Firefox': 2, 'other': 0}
         self.playing = "don't know yet" # e.g., "X" or "O".
@@ -39,14 +36,19 @@ class OurAgent(KAgent):  # Keep the class name "OurAgent" so a game master
         self.num_static_evals_this_turn = -1
         self.zobrist_table_num_entries_this_turn = -1
         self.zobrist_table_num_hits_this_turn = -1
+
+        self.zobrist_current = None
+        self.zobrist_bits = None
+        self.transposition_table = {} # contain all the stored state values :)
+
         self.current_game_type = None
         self.playing_mode = KAgent.DEMO
 
     def introduce(self):
-        intro = '\nMy name is Templatus Skeletus.\n'+\
-            '"An instructor" made me.\n'+\
-            'Somebody please turn me into a real game-playing agent!\n'
-        if self.twin: intro += "By the way, I'm the TWIN.\n"
+        intro = f'\nMy name is {self.long_name}.\n'+\
+            '"My creators have charged me with destroying all other agents.\n'+\
+            'Don\'t take it personally. ;) \nAlso, I\'m really into K-pop Demon Hunters right now. :D \n'
+        if self.twin: intro += "I'm the also the TWIN.\n"
         return intro
 
     # Receive and acknowledge information about the game from
@@ -64,6 +66,7 @@ class OurAgent(KAgent):  # Keep the class name "OurAgent" so a game master
                                       # and do not import any LLM or special APIs.
                                       # During the tournament, this will be False..
        if utterances_matter:
+           # TODO: Implement K-pop demon hunters utterances. Set global variable / private var to api.
            pass
            # Optionally, import your LLM API here.
            # Then you can use it to help create utterances.
@@ -77,11 +80,13 @@ class OurAgent(KAgent):  # Keep the class name "OurAgent" so a game master
        self.rows = game_type.n
        self.cols = game_type.m
 
+       self.init_zobrist()
+
        print(f"Prepared to play {game_type.long_name} as {self.playing}.")
        print("Change this to return 'OK' when ready to test the method.")
        return "Not-OK"
    
-    # The core of your agent's ability should be implemented here:             
+
     def make_move(self,
                   current_state,
                   current_remark,
@@ -89,21 +94,33 @@ class OurAgent(KAgent):  # Keep the class name "OurAgent" so a game master
                   use_alpha_beta=True,
                   use_zobrist_hashing=False, max_ply=3,
                   special_static_eval_fn=None):
+        """
+        Given a valid state, one where there is a possible move and no winner is already established,
+        the method finds the best move given the time limit and returns a list of the form
+        [[newMove, newState, stat1, ..., stat4], myUtterance].
+        
+        newMove is of the form (i, j) giving the row and column positions where the player is putting an X or O.
+        newState is a valid state object representing the result of making the move.
+        myUtterance is the player's current contribution to the ongoing dialog and must be a string.
+        """
         print("make_move has been called")
 
+        # print("code to compute a good move should go here.")
 
-        print("code to compute a good move should go here.")
+        # Call minimax to find the best move.
         best_move, best_value = self.minimax(current_state,
                                              max_ply,
                                              time_limit,
                                              use_alpha_beta)
+        
+        # Create new state using the best_move
         new_state = State(old=current_state)
         i = best_move[0]
         j = best_move[1]
         new_state.board[i][j] = current_state.whose_move
         new_state.whose_move = "O" if current_state.whose_move is "X" else "X"
 
-    
+        # TODO: Write appropriate utterance with state.
         new_remark = "I need to think of something appropriate.\n" +\
         "Well, I guess I can say that this move is probably illegal."
 
@@ -111,8 +128,7 @@ class OurAgent(KAgent):  # Keep the class name "OurAgent" so a game master
         # return [[best_Move, newState, stat1, ..., stat4], myUtterance]
         return [[best_move, new_state], new_remark]
 
-    # The main adversarial search function:
-    #TODO
+   
     def minimax(self,
                 state,
                 depth_remaining,
@@ -120,20 +136,27 @@ class OurAgent(KAgent):  # Keep the class name "OurAgent" so a game master
                 pruning=False,
                 alpha=None,
                 beta=None):
+        """
+        minimax is a helper function called by make_move. It implements minimax search.
+        Returns a move an float value that corresponds to the evaluation of the move.
+        """
         # print("Calling minimax. We need to implement its body.")
         
         start_time = time.time()
 
+        # If at max_ply, return static evaluation of state.
         if depth_remaining == 0:
             return (None, self.static_eval(state, self.current_game_type))
 
+        # Otherwise, find the successors and corresponding moves.
         successors, moves = successors_and_moves(state)
 
-        if not successors:  # No legal moves
+        # If no legal moves, return the static evaluation of state.
+        if not successors:
             return (None, self.static_eval(state, self.current_game_type))
 
-
         ### EDIT WORK FROM HERE
+
         # Initialize best value depending on whose turn it is
         player = state.whose_move
         best_value = float("inf") if (player == "O") else float("-inf")
@@ -193,8 +216,7 @@ class OurAgent(KAgent):  # Keep the class name "OurAgent" so a game master
                 
             # raise ValueError("could not identify score for a line")
             return 0
-
-        
+    
     def static_eval(self, state, game_type=None):
         # print('calling static_eval. Its value needs to be computed!')
         # Values should be higher when the states are better for X,
@@ -251,6 +273,42 @@ class OurAgent(KAgent):  # Keep the class name "OurAgent" so a game master
 
         # print("its " + str(self.nickname) + "'s score after making a move.")
         return total
+    
+    def init_zobrist(self):
+        """
+        Generates a table of random bitstrings for every possible move on the board.
+        There are 2 pieces ('X' and 'O') as well as n x m possible positions.
+        Hence, we generate 2 x n x m possible bit strings.
+        """
+
+        self.zobrist_bits = [[None] * self.rows*self.cols] * 2
+
+        for piece in range(2): # Loop over pieces
+            for position in range(self.rows*self.cols): # Loop over all board positions
+                self.zobrist_bits[piece][position] = random.getrandbits(32) # TODO: 32 bits might be good enough? The number of states are sig lower than chess.
+        self.zobrist_current = 0
+    
+    def hash(self, state_hash, piece, position: tuple[int, int]):
+        """
+        Generate iterative hash code given the hash code of the existing state, the piece to be
+        added, and the position where it will be added.
+        """
+        table_position = position[0] * self.rows + position[1]
+        piece = 0 if piece == "O" else 1
+        return state_hash ^ self.zobrist_bits[piece][table_position]
+    
+    def hash(self, state):
+        """
+        Compute the hash for a state.
+        """
+        h = 0
+        for i in range(self.rows):
+            for j in range(self.cols):
+                if state[i][j] == "X" or state.board[i][j] == "O":
+                    piece = 0 if state.board[i][j] == "O" else 1
+                    table_position = i * self.rows + j
+                    h = h ^ self.zobrist_bits[piece][table_position]
+        return h
  
 # OPTIONAL THINGS TO KEEP TRACK OF:
 
@@ -297,9 +355,26 @@ def successors_and_moves(state):
         new_states.append(item[1])
     return [new_states, moves]
 
-# Performa a move to get a new state.
+# Perform a a move to get a new state.
 def do_move(state, i, j, o):
             news = State(old=state)
             news.board[i][j] = state.whose_move
             news.whose_move = o
             return news
+
+def roman_numeral(n):
+    """ 
+    Method takes an integer between 1000 to 2000 and returns the roman numeral representation.
+    """
+    romans = [(1, "I"), (5, "V"), (10, "X"), (50, "L"), (100, "C"), (500, "D"), (1000, "M")]
+    
+    i = 7
+    final = ""
+
+    while n > 0:
+        if n - romans[7][0] > 0:
+            final += romans[7][1] + final
+            n = n - romans[7][0]
+        else:
+            i -= 1
+    return final
