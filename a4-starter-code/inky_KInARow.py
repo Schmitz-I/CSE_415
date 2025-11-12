@@ -187,7 +187,9 @@ class OurAgent(KAgent):
 
         print(f"{self.nickname} is making it's move.")
 
-        print("Stats:", "cutoffs", self.alpha_beta_cutoffs_this_turn, "static evals", self.num_static_evals_this_turn, "table writes", self.zobrist_table_num_writes_this_turn, "table reads", self.zobrist_table_num_read_this_turn, "table hits", self.zobrist_table_num_hits_this_turn)
+        print("Stats:", "cutoffs", self.alpha_beta_cutoffs_this_turn, "static evals",
+               self.num_static_evals_this_turn, "table writes", self.zobrist_table_num_writes_this_turn, 
+               "table reads", self.zobrist_table_num_read_this_turn, "table hits", self.zobrist_table_num_hits_this_turn)
 
         if use_alpha_beta and use_zobrist_hashing:
             return [[best_move, new_state#,
