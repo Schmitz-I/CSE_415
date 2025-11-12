@@ -147,6 +147,7 @@ class OurAgent(KAgent):
                   use_alpha_beta=True,
                   use_zobrist_hashing=True, max_ply=3,
                   special_static_eval_fn=None):
+        
         """
         Given a valid state, one where there is a possible move and no winner is already established,
         the method finds the best move given the time limit and returns a list of the form
@@ -174,7 +175,8 @@ class OurAgent(KAgent):
                                              max_ply,
                                              time_limit,
                                              use_alpha_beta,
-                                             use_zobrist_hashing)
+                                             use_zobrist_hashing,
+                                             special_static_eval_fn=special_static_eval_fn)
         
         # Create new state using the best_move
         new_state = State(old=current_state)
@@ -210,7 +212,8 @@ class OurAgent(KAgent):
                 hashing=True,
                 alpha=None,
                 beta=None,
-                zhash=None):
+                zhash=None,
+                special_static_eval_fn=None):
         """
         minimax is a helper function called by make_move. It implements minimax search.
         Utilizes history heuristic and transposition table to increase efficency. 
@@ -221,7 +224,11 @@ class OurAgent(KAgent):
 
         # If at max_ply, return static evaluation of state.
         if depth_remaining == 0:
-            return (None, self.static_eval(state, self.current_game_type))
+            if special_static_eval_fn is not None:
+                value = special_static_eval_fn(state)
+            else:
+                value = self.static_eval(state, self.current_game_type)
+            return (None, value)
         
         # Initialize values
         player = state.whose_move
@@ -276,7 +283,11 @@ class OurAgent(KAgent):
 
         # If no legal moves, return the static evaluation of state.
         if not successors:
-            return (None, self.static_eval(state, self.current_game_type))
+            if special_static_eval_fn is not None:
+                value = special_static_eval_fn(state)
+            else:
+                value = self.static_eval(state, self.current_game_type)
+            return (None, value)
 
         # Sort by history heuristic
         successors, moves = self.sort_by_history(successors, moves, zhash)
@@ -300,13 +311,14 @@ class OurAgent(KAgent):
                                     time_limit,
                                     pruning,
                                     hashing,
-                                    alpha, beta, child_zhash)
+                                    alpha, beta, child_zhash,
+                                    special_static_eval_fn)
 
-            if (player == "O") & (value < best_value):
+            if (player == "O") and (value < best_value):
                 best_value = value
                 best_move = moves[i]
             
-            elif (player == "X") & (value > best_value):
+            elif (player == "X") and (value > best_value):
                 best_value = value
                 best_move = moves[i]
 
@@ -512,7 +524,8 @@ def successors_and_moves(state):
         moves.append(item[0])
         new_states.append(item[1])
 
-    return [new_states, moves]
+    return new_states, moves
+
 
 
 def do_move(state, i, j, o):
