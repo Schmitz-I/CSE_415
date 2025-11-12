@@ -186,8 +186,8 @@ def test():
 
     import hocadoo_KInARow as hoc
     import RandomPlayer as bot
-    po = hoc.OurAgent()
-    px = bot.OurAgent()
+    px = hoc.OurAgent()
+    po = bot.OurAgent()
     set_players(px, po)
     print("Players are set.")
     print("Now let's run the game.")
