@@ -68,10 +68,9 @@ class OurAgent(KAgent):
         self.utt_count_winning = 0
 
         # Zobrist hashing variables
-        self.zobrist_current = None 
         self.zobrist_bits = None
         self.transposition_table = [None] * 2**20 # contain all the stored state values :) Never replace
-        self.zobrist_turn = random.getrandbits(64)
+        self.zobrist_current = None
 
         # Ordering heuristic for alpha-beta pruning
         self.history_cutoff = {}
@@ -159,6 +158,10 @@ class OurAgent(KAgent):
         """
         print(f"{self.nickname} is thinking.")
 
+        # Calculate the zobrist hashing for the state
+        if use_zobrist_hashing:
+            self.zobrist_current = self.complete_hash(current_state)
+
         # Reset stat values
         self.alpha_beta_cutoffs_this_turn = 0
         self.num_static_evals_this_turn = 0
@@ -179,10 +182,6 @@ class OurAgent(KAgent):
         j = best_move[1]
         new_state.board[i][j] = current_state.whose_move
         new_state.whose_move = "O" if current_state.whose_move == "X" else "X"
-
-        # Update zobrist hash for the current state
-        if use_zobrist_hashing:
-            self.zobrist_current = self.hash(self.zobrist_current, new_state.whose_move, (i,j))
 
         nextUtterance = self.gen_next_utterance(best_value)
 
@@ -226,7 +225,7 @@ class OurAgent(KAgent):
         player = state.whose_move
         best_move = None
         best_value = float("inf") if (player == "O") else float("-inf")
-        cutoff_type = None # To be stored in zobrist hash table
+        cutoff_type = 0 # To be stored in zobrist hash table
         
         # See if the state has been hashed in the TT
         zhash = self.zobrist_current if zhash is None else zhash
@@ -255,7 +254,7 @@ class OurAgent(KAgent):
             if flag == 1:
                 alpha = max(alpha, stored_value) if alpha is not None else stored_value
 
-                if pruning and alpha >= beta:
+                if pruning and beta is not None and alpha >= beta:
                     # Cutoff found from TT. Stop search immediately.
                     self.alpha_beta_cutoffs_this_turn += 1
                     return (stored_best_move, stored_value)
@@ -264,7 +263,7 @@ class OurAgent(KAgent):
             if flag == 2:
                 beta = min(beta, stored_value) if beta is not None else stored_value
 
-                if pruning and alpha >= beta:
+                if pruning and alpha is not None and alpha >= beta:
                     # Cutoff found from TT. Stop search immediately.
                     self.alpha_beta_cutoffs_this_turn += 1
                     return (stored_best_move, stored_value)
@@ -284,7 +283,7 @@ class OurAgent(KAgent):
         for i in range(len(successors)):
             child = successors[i]
             move = moves[i]
-            child_zhash = self.hash(zhash, child.whose_move, move)
+            child_zhash = self.hash(zhash, player, move)
 
             # Check if the time limit has been reached
             check_time = time.time()
@@ -298,6 +297,7 @@ class OurAgent(KAgent):
                                     depth_remaining - 1,
                                     time_limit,
                                     pruning,
+                                    hashing,
                                     alpha, beta, child_zhash)
 
             if (player == "O") & (value < best_value):
@@ -325,6 +325,7 @@ class OurAgent(KAgent):
                             self.history_cutoff[child_zhash] = 1
 
                         cutoff_type = 2 if player == "O" else 1
+                        self.update_TT(child_zhash, best_value, cutoff_type, best_move)
                         break
         
         self.update_TT(TT_hash, best_value, cutoff_type, best_move)
@@ -344,9 +345,9 @@ class OurAgent(KAgent):
                 priority.append(self.history_cutoff[child_zhash])
             else:
                 priority.append(0)
-            scored_triples = list(zip(successors, moves, priority))
-            scored_triples.sort(key=lambda tri: tri[2], reverse=True)
-            sorted_successors, sorted_moves, _ = zip(*scored_triples)
+        scored_triples = list(zip(successors, moves, priority))
+        scored_triples.sort(key=lambda tri: tri[2], reverse=True)
+        sorted_successors, sorted_moves, _ = zip(*scored_triples)
         
         return sorted_successors, sorted_moves
  
@@ -449,9 +450,24 @@ class OurAgent(KAgent):
         added, and the position where it will be added.
         """
         table_position = position[0] * self.cols + position[1]
+        
         piece = 0 if piece == "O" else 1
 
-        return state_hash ^ self.zobrist_bits[piece][table_position] ^ self.zobrist_turn
+        return state_hash ^ self.zobrist_bits[piece][table_position] #^ self.zobrist_turn
+    
+    def complete_hash(self, state):
+        """
+        Generate the hash of a state.
+        """
+        hash = 0
+        for i in range(self.rows):
+            for j in range(self.cols):
+                if state.board[i][j] != " " and state.board[i][j] != "-":
+                    table_position = i * self.cols + j
+                    piece = 0 if state.board[i][j] == "O" else 1
+                    hash ^= self.zobrist_bits[piece][table_position]
+
+        return hash #^ self.zobrist_turn
 
     
     def update_TT(self, hash_state, score, cutoff_type, best_move):
@@ -460,9 +476,9 @@ class OurAgent(KAgent):
         Cut-off type should be an integer, 0, 1, 2 where 0 represents "exact value", 1 - "alpha cut-off", and 2 - "beta cut-off".
         """
         TT_hash = hash_state & 0xFFFFF
-        if self.transposition_table[TT_hash] is None:
-            self.transposition_table[TT_hash] = (hash_state, score, cutoff_type, best_move)
-            self.zobrist_table_num_writes_this_turn += 1
+        
+        self.transposition_table[TT_hash] = (hash_state, score, cutoff_type, best_move)
+        self.zobrist_table_num_writes_this_turn += 1
 
 
 ### HELPER FUNCTIONS ###
