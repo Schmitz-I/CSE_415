@@ -1,8 +1,3 @@
-### ELIZABETH TODOS: Implement transposition table. Think about how I want it to handle limited resources :/
-## After transposition table, then implement ETC and MTD to increase pruning.
-## After that, implement utterances :D
-
-
 '''
 inky_KInARow.py
 Authors: Schmitz, Ilse; Vuu, Alexander; Bui, Elizabeth
@@ -14,7 +9,7 @@ CSE 415, University of Washington
 from agent_base import KAgent
 from game_types import State, Game_Type
 
-AUTHORS = 'Ilse Schmitz and Alexander Vuu and Elizabeth Bui' 
+AUTHORS = 'Ilse Schmitz, Alexander Vuu, and Elizabeth Bui' 
 UWNETIDS = ['inky', 'hocadoo', 'kaitebui']
 
 import time
@@ -37,9 +32,11 @@ class OurAgent(KAgent):
         self.zobrist_table_num_entries_this_turn = -1
         self.zobrist_table_num_hits_this_turn = -1
 
-        self.zobrist_current = None
+        self.zobrist_current = None # TODO: See if you remove this :/
         self.zobrist_bits = None
-        self.transposition_table = {} # contain all the stored state values :)
+        self.transposition_table = [None] * 2**32 # contain all the stored state values :) Always replace
+
+        self.history_cutoff = {}
 
         self.current_game_type = None
         self.playing_mode = KAgent.DEMO
@@ -120,13 +117,15 @@ class OurAgent(KAgent):
         new_state.board[i][j] = current_state.whose_move
         new_state.whose_move = "O" if current_state.whose_move is "X" else "X"
 
+        self.zobrist_current = self.hash(self.zobrist_current, new_state.whose_move, (i,j))
+
         # TODO: Write appropriate utterance with state.
         new_remark = "I need to think of something appropriate.\n" +\
         "Well, I guess I can say that this move is probably illegal."
 
         print("Returning from make_move")
         # return [[best_Move, newState, stat1, ..., stat4], myUtterance]
-        return [[best_move, new_state], new_remark]
+        return [[best_move, new_state], new_remark] # TODO: Need to return the statistics??? For zobrist hashing :/ 
 
    
     def minimax(self,
@@ -135,11 +134,16 @@ class OurAgent(KAgent):
                 time_limit,
                 pruning=False,
                 alpha=None,
-                beta=None):
+                beta=None,
+                zhash=None):
         """
         minimax is a helper function called by make_move. It implements minimax search.
+        Utilizes history heuristic and transposition table to increase efficency. 
         Returns a move an float value that corresponds to the evaluation of the move.
         """
+
+        ## TODO: Use the history heuristic next :)
+        ### TODO: Add the values state evaluation into the TT. 
         # print("Calling minimax. We need to implement its body.")
         
         start_time = time.time()
@@ -147,9 +151,29 @@ class OurAgent(KAgent):
         # If at max_ply, return static evaluation of state.
         if depth_remaining == 0:
             return (None, self.static_eval(state, self.current_game_type))
+        
+        best_value = float("inf") if (player == "O") else float("-inf")
+        
+        zhash = self.zobrist_current if zhash is None else zhash
+        TT_hash = zhash & 0xFFFFF
+        if self.transposition_table[TT_hash][0] == self.zobrist_hash \
+            and self.transposition_table[TT_hash][4] == state.whose_move:
+            
+            # If exact, return the best move.
+            if self.transposition_table[TT_hash][2] == 0:
+                return (self.transposition_table[TT_hash][3], self.transposition_table[TT_hash][1]) # (best_move, value)
+            
+            # If non-exact, use it to tighten the bounds.
+            if self.transposition_table[TT_hash][2] == 2 and state.whoose_move == "O":
+                best_value = self.transposition_table[TT_hash][1]
+
+            if self.transposition_table[TT_hash][2] == 1 and state.whoose_move == "X":
+                best_value = self.transposition_table[TT_hash][1]
+
 
         # Otherwise, find the successors and corresponding moves.
         successors, moves = successors_and_moves(state)
+        successors, moves = self.sort_by_history(successors, moves, zhash)
 
         # If no legal moves, return the static evaluation of state.
         if not successors:
@@ -159,9 +183,14 @@ class OurAgent(KAgent):
 
         # Initialize best value depending on whose turn it is
         player = state.whose_move
-        best_value = float("inf") if (player == "O") else float("-inf")
         best_move = None
-        for i, child in enumerate(successors):
+
+        cutoff_type = None
+
+        for i in range(len(successors)):
+            child = successors[i]
+            move = moves[i]
+            child_zhash = self.hash(zhash, child.whoose_move, move)
             # Check if the time limit has been reached
             check_time = time.time()
             elapsed = check_time - start_time
@@ -172,7 +201,7 @@ class OurAgent(KAgent):
             _, value = self.minimax(child,
                                     depth_remaining - 1,
                                     time_limit,
-                                    alpha, beta)
+                                    alpha, beta, child_zhash)
 
             if (player == "O") & (value < best_value):
                 best_value = value
@@ -184,15 +213,21 @@ class OurAgent(KAgent):
             # Alpha-beta pruning
             if pruning:
                 if alpha is not None and beta is not None:
-                    if player == "0":
+                    if player == "O":
                         beta = min(beta, best_value)
                     else:
                         alpha = max(alpha, best_value)
                     if beta <= alpha:
-                        break
+                        if child_zhash in self.history_cutoff:
+                            self.history_cutoff[child_zhash] += 1
+                        else:
+                            self.history_cutoff[child_zhash] = 1
 
-        return (best_move, best_value)
+                        cutoff_type = 2 if player == "O" else 1
+                        break
         
+        self.update_TT(self, TT_hash, best_value, cutoff_type, best_move, player)
+        return (best_move, best_value)
 
         # default_score = 0 # Value of the passed-in state. Needs to be computed.
     
@@ -201,8 +236,20 @@ class OurAgent(KAgent):
         # in the list, after the score, in case you want to pass info
         # back from recursive calls that might be used in your utterances,
         # etc. 
+
+    def sort_by_history(self, successors, moves, parent_hash):
+        priority = []
+        for i in range in len(successors):
+            child_zhash = self.hash(parent_hash, successors[i].whoose_move, moves[i])
+            if child_zhash in self.history_cutoff:
+                priority.append(self.history_cutoff[child_zhash])
+            else:
+                child_zhash.append(0)
+        
+        return zip(*zip(successors, moves, priority).sort(key=lambda tri: tri[2]))
+
  
-    #TODO
+
     def score_lines(self, single_line, symbols_for_win):
             if('-' in single_line):
                 return 0
@@ -285,7 +332,7 @@ class OurAgent(KAgent):
 
         for piece in range(2): # Loop over pieces
             for position in range(self.rows*self.cols): # Loop over all board positions
-                self.zobrist_bits[piece][position] = random.getrandbits(32) # TODO: 32 bits might be good enough? The number of states are sig lower than chess.
+                self.zobrist_bits[piece][position] = random.getrandbits(64)
         self.zobrist_current = 0
     
     def hash(self, state_hash, piece, position: tuple[int, int]):
@@ -309,6 +356,14 @@ class OurAgent(KAgent):
                     table_position = i * self.rows + j
                     h = h ^ self.zobrist_bits[piece][table_position]
         return h
+    
+    def update_TT(self, hash_state, score, cutoff_type, best_move, player):
+        """
+        Update the transition table to include the overide.
+        Cut-off type should be an integer, 0, 1, 2 where 0 represents "exact value", 1 - "alpha cut-off", and 2 - "beta cut-off".
+        """
+        TT_hash = hash_state & 0xFFFFF
+        self.transposition_table[TT_hash] = (hash_state, score, cutoff_type, best_move, player)
  
 # OPTIONAL THINGS TO KEEP TRACK OF:
 
@@ -353,6 +408,7 @@ def successors_and_moves(state):
     for item in move_gen(state):
         moves.append(item[0])
         new_states.append(item[1])
+
     return [new_states, moves]
 
 # Perform a a move to get a new state.
