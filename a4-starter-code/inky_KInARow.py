@@ -366,79 +366,58 @@ class OurAgent(KAgent):
         return sorted_successors, sorted_moves
  
 
-    def score_lines(self, single_line, symbols_for_win):
-        """
-        Helper function for the static evaluation function. Returns the value of a given line.
-        """
-        if('-' in single_line):
-            return 0
-        
-        for i in range(symbols_for_win):
-            if(single_line.count("X") == (symbols_for_win-i) and single_line.count(" ") == i):
-                return 10**(symbols_for_win-i-1)
-            
-            if(single_line.count("O") == (symbols_for_win-i) and single_line.count(" ") == i):
-                return -1*10**(symbols_for_win-i-1)
-            
-        if(single_line.count(" ") == len(single_line)):
-            return 0
-                
-        return 0
-    
-
     def static_eval(self, state, game_type=None):
-        """
-        Static Evaluation function.
-        """
-        check_state = State(old=state)
-
         if game_type is None:
             game_type = self.current_game_type
 
-        rows = game_type.n
-        cols = game_type.m
-        k = game_type.k # symbols to win
-        
-        if(k > cols and k > rows):
-            raise ValueError("symbols for a win is greater rows or columns")
-        
-        # all possible lines to score
+        b = state.board
+        rows, cols, k = game_type.n, game_type.m, game_type.k
+
         lines = []
 
-        # horizontal lines
-        lines.extend(check_state.board)
+        # Horizontal
+        for r in range(rows):
+            for c in range(cols - k + 1):
+                lines.append([b[r][c+i] for i in range(k)])
 
-        # vertical lines
+        # Vertical
         for c in range(cols):
-            lines.append([check_state.board[r][c] for r in range(rows)])
-        
-        # diagonal lines left to right
-        for r in range(rows-k+1):# r Row
-            for c in range(cols-k+1):# c Column
-                linemaker = []
-                for l in range(k): # l Length
-                    linemaker.append(check_state.board[r+l][c+l])
-                lines.append(linemaker)
-        
-        # diagonal lines right to left
-        for r in range(rows-1, k-2, -1): # Iterate over rows
-            for c in range(cols-1, k-2, -1): # Iterate over columns
+            for r in range(rows - k + 1):
+                lines.append([b[r+i][c] for i in range(k)])
 
-                linemaker = []
+        # Diagonals ↘︎
+        for r in range(rows - k + 1):
+            for c in range(cols - k + 1):
+                lines.append([b[r+i][c+i] for i in range(k)])
 
-                for l in range(k): # Iterate over length
-                    linemaker.append(check_state.board[r-l][c-l])
-                lines.append(linemaker)
-            
+        # Diagonals ↙︎
+        for r in range(rows - k + 1):
+            for c in range(k - 1, cols):
+                lines.append([b[r+i][c-i] for i in range(k)])
+
         total = 0
+        for line in lines:
+            total += self.score_lines(line, k)
 
-        for LineToScore in lines:
-            total += self.score_lines(LineToScore, k)
-        
-        # Add 1 to the number of static evaluations this turn.
         self.num_static_evals_this_turn += 1
-
         return total
+
+
+    def score_lines(self, line, k):
+        if '-' in line:
+            return 0
+        if 'X' in line and 'O' in line:
+            return 0
+
+        countX = line.count('X')
+        countO = line.count('O')
+
+        if countX > 0 and countO == 0:
+            return 10 ** countX
+        elif countO > 0 and countX == 0:
+            return -(10 ** countO)
+        else:
+            return 0
     
 
     ### Zobrist Hashing Functions
