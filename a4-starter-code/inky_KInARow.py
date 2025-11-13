@@ -367,6 +367,9 @@ class OurAgent(KAgent):
  
 
     def static_eval(self, state, game_type=None):
+        """
+        Returns static evaluation function.
+        """
         if game_type is None:
             game_type = self.current_game_type
 
@@ -385,12 +388,12 @@ class OurAgent(KAgent):
             for r in range(rows - k + 1):
                 lines.append([b[r+i][c] for i in range(k)])
 
-        # Diagonals ↘︎
+        # Diagonals
         for r in range(rows - k + 1):
             for c in range(cols - k + 1):
                 lines.append([b[r+i][c+i] for i in range(k)])
 
-        # Diagonals ↙︎
+        # Diagonals
         for r in range(rows - k + 1):
             for c in range(k - 1, cols):
                 lines.append([b[r+i][c-i] for i in range(k)])
@@ -404,6 +407,9 @@ class OurAgent(KAgent):
 
 
     def score_lines(self, line, k):
+        """
+        Returns score for a line.
+        """
         if '-' in line:
             return 0
         if 'X' in line and 'O' in line:
@@ -504,7 +510,6 @@ def successors_and_moves(state):
         new_states.append(item[1])
 
     return new_states, moves
-
 
 
 def do_move(state, i, j, o):
