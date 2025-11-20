@@ -1,9 +1,15 @@
-Name: John Doe
-Student ID: 1111111
-Email: johndoe@uw.edu
+Name: Ilse Schmitz, Alexander Vuu
+Student ID: 2162925, [FILL IN]
+Email: inky@uw.edu, hocadoo@uw.edu
 
 1. In the context of the Towers-of-Hanoi World MDP, explain how the Value Iteration algorithm uses the Bellman equations to iteratively compute the value table. (5 points)
 
+For value iteration, the Towers-of-Hanoi MDP uses the value iteration algorithm to continually update the value table, allowing each value to update until it reaches convergence, or at least very close to convergence, for each state. It does this using the Q-value function, starting from an initial Q-value and converging closer to the true value with each iteration. 
+
 2. How did you decide your custom epsilon function? What thoughts went into that and what would you change to further optimize your exploration? If your function was strong, explain why. (5 points)
 
+We decided the custom epsilon function based on the lecture notes provided, with 1 / n_steps being the epsilon chosen. This allows the function to replace the initial value as quickly as possible, especially as we set the initial value to zero, and have no prior information about the values when we begin the algorithm.
+
 3. What is another exploration strategy other than epsilon-greedy that you believe would fit well with the Towers of Hanoi formulation? Why? (5 points)
+
+An alternative would be to use the Boltzmann equation, ...
