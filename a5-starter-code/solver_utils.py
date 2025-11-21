@@ -49,8 +49,6 @@ def value_iteration(
         max_delta = max(max_delta, abs(best - v_table[s]))
         
     # ***  END OF YOUR CODE  ***
-
-    print(q_table)
     return new_v_table, q_table, max_delta
 
 
@@ -140,6 +138,19 @@ def extract_v_table(mdp: tm.TohMdp, q_table: tm.QTable) -> tm.VTable:
             The extracted value table.
     """
     # *** BEGIN OF YOUR CODE ***
+    v_table = {}
+
+    
+    for s in mdp.nonterminal_states:
+        actions = [op.name for op, _ in mdp.state_graph[s]] + ["Exit"]
+        best = -float("inf")
+        for a in actions:
+            if(q_table[(s, a)] > best):
+                best = q_table[(s, a)]
+                
+        v_table[s] = best
+    
+    return v_table
 
 
 def choose_next_action(
@@ -173,6 +184,21 @@ def choose_next_action(
             The chosen action.
     """
     # *** BEGIN OF YOUR CODE ***
+    best_action = []
+    best_val = -float("inf")
+    
+    for a in [a for (s, a) in q_table.keys() if s == state]:
+    
+        val = q_table.get((state, a), 0.0)
+        if(best_val < val):
+            best_action.clear()
+            best_action.append(a)
+            best_val = val
+        elif(best_val == val):
+            best_action.append(a)
+    
+    
+    return epsilon_greedy(best_action, epsilon)
 
 
 def custom_epsilon(n_step: int) -> float:
@@ -188,7 +214,8 @@ def custom_epsilon(n_step: int) -> float:
             epsilon value when choosing the nth step.
     """
     # *** BEGIN OF YOUR CODE ***
-
+    
+    return 1.0 / (n_step ** 0.5 + 1)
 
 def custom_alpha(n_step: int) -> float:
     """Calculates the alpha value for the nth Q learning step.

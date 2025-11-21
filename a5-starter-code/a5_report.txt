@@ -8,7 +8,7 @@ For value iteration, the Towers-of-Hanoi MDP uses the value iteration algorithm 
 
 2. How did you decide your custom epsilon function? What thoughts went into that and what would you change to further optimize your exploration? If your function was strong, explain why. (5 points)
 
-We decided the custom epsilon function based on the lecture notes provided, with 1 / n_steps being the epsilon chosen. This allows the function to replace the initial value as quickly as possible, especially as we set the initial value to zero, and have no prior information about the values when we begin the algorithm.
+We decided the custom epsilon function based on the lecture notes provided, with 1 / (n_steps^2 + 1) being the epsilon chosen. This allows the function to replace the initial value as quickly as possible, especially as we set the initial value to zero, and have no prior information about the values when we begin the algorithm. Epsilon is high when we start, and decreases dramatically which is how we get the GREEDY Algorithm. When we didn't use an exponent for 1 / (n_steps + 1) (what we did at first) we got 5/10 since our model didn't find the optimal path, so to make our alg more greedy we just squared n_steps.
 
 3. What is another exploration strategy other than epsilon-greedy that you believe would fit well with the Towers of Hanoi formulation? Why? (5 points)
 
