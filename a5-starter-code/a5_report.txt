@@ -12,4 +12,4 @@ We decided the custom epsilon function based on the lecture notes provided, with
 
 3. What is another exploration strategy other than epsilon-greedy that you believe would fit well with the Towers of Hanoi formulation? Why? (5 points)
 
-An alternative would be to use the Boltzmann equation, ...
+An alternative would be to use the Boltzmann equation, which would use a parameter T as temperature, with higher T values encouraging exploration, and lower T values encouraging the known optimal path. T could easily be written in terms of n_steps, encouraging early game exploration for towers of Hanoi, before shifting towards following known optimal paths. With the right equation for T, this could help mitigate the slow convergence rate of epsilon-greedy. 
